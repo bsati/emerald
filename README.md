@@ -1,6 +1,6 @@
 # emerald
 
-Basic command line utility to encrypt / decrypt files using XChaCha20Poly1305 with PBKDF2 key derivation.
+Basic command line utility to encrypt / decrypt files using XChaCha20Poly1305 with Argon2 key derivation.
 
 ## Usage
 

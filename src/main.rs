@@ -60,7 +60,7 @@ fn decrypt(sub_matches: &ArgMatches) -> anyhow::Result<()> {
             o
         });
 
-    let pass = prompt_pass();
+    let pass = rpassword::prompt_password("Enter password: ")?;
 
     let mut input_file = File::open(&input)?;
     let mut bytes = Vec::new();
@@ -71,7 +71,7 @@ fn decrypt(sub_matches: &ArgMatches) -> anyhow::Result<()> {
     let salt = &bytes[NONCE_SIZE..(NONCE_SIZE + SALT_SIZE)];
     let data = &bytes[(NONCE_SIZE + SALT_SIZE)..];
 
-    let key = derive_key(pass, &salt);
+    let key = derive_key(pass, &salt)?;
 
     let cipher = XChaCha20Poly1305::new(&key);
 
@@ -101,7 +101,7 @@ fn encrypt(sub_matches: &ArgMatches) -> anyhow::Result<()> {
 
     let pass = prompt_pass();
     let salt = generate_salt();
-    let key = derive_key(pass, &salt);
+    let key = derive_key(pass, &salt)?;
 
     let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
     let cipher = XChaCha20Poly1305::new(&key);
@@ -136,19 +136,24 @@ fn generate_salt() -> [u8; SALT_SIZE] {
     salt
 }
 
-fn derive_key(pass: String, salt: &[u8]) -> chacha20poly1305::Key {
+fn derive_key(pass: String, salt: &[u8]) -> anyhow::Result<chacha20poly1305::Key> {
+    let config = argon2::Argon2::default();
+
     let mut derived_key = [0u8; KEY_SIZE];
-    pbkdf2::pbkdf2_hmac::<sha2::Sha256>(&pass.as_bytes(), &salt, 10000, &mut derived_key);
+
+    config
+        .hash_password_into(pass.as_bytes(), salt, &mut derived_key)
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     let chacha_key = chacha20poly1305::Key::from_slice(&derived_key);
 
-    *chacha_key
+    Ok(*chacha_key)
 }
 
 fn prompt_pass() -> String {
     loop {
-        let pass: String = rpassword::prompt_password("Enter key: ").unwrap();
-        let pass_repeat: String = rpassword::prompt_password("Repeat key: ").unwrap();
+        let pass: String = rpassword::prompt_password("Enter password: ").unwrap();
+        let pass_repeat: String = rpassword::prompt_password("Repeat password: ").unwrap();
 
         if pass == pass_repeat {
             return pass;
