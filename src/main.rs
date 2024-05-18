@@ -163,6 +163,28 @@ fn prompt_pass() -> String {
     }
 }
 
+fn add_files_recursively(
+    builder: &mut Builder<&mut File>,
+    base_path: &PathBuf,
+    rel_path: &PathBuf,
+) -> anyhow::Result<()> {
+    let mut entries = std::fs::read_dir(base_path)?;
+
+    while let Some(entry) = entries.next() {
+        let entry = entry?;
+        let path = entry.path();
+        let tar_path = path.strip_prefix(rel_path)?;
+
+        if path.is_dir() {
+            add_files_recursively(builder, &path, rel_path)?;
+        } else {
+            builder.append_path_with_name(&path, tar_path)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn create_tarball(files: &Vec<&String>, output: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
     let archive_path = output.unwrap_or(&PathBuf::from("archive.tar")).to_owned();
     let mut tarball = OpenOptions::new()
@@ -174,8 +196,16 @@ fn create_tarball(files: &Vec<&String>, output: Option<&PathBuf>) -> anyhow::Res
     let mut builder = Builder::new(&mut tarball);
 
     for file_path in files {
-        // Add the file to the tarball
-        builder.append_path_with_name(&file_path, PathBuf::from(file_path).file_name().unwrap())?;
+        if PathBuf::from(file_path).is_dir() {
+            add_files_recursively(
+                &mut builder,
+                &PathBuf::from(file_path),
+                &PathBuf::from(file_path),
+            )?;
+        } else {
+            builder
+                .append_path_with_name(&file_path, PathBuf::from(file_path).file_name().unwrap())?;
+        }
     }
 
     builder.finish()?;
